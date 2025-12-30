@@ -2204,6 +2204,10 @@ browser program -- are given @ref{racket-ext-link-face}.
 @tab @code{racket-describe-nav-top}
 @item @kbd{x} 
 @tab @code{racket-describe-browse-external}
+@item @kbd{L} 
+@tab @code{racket-describe-choose-language-family}
+@item @kbd{a} 
+@tab @code{racket-describe-about-language-family}
 @end multitable
 
 

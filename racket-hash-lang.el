@@ -1,6 +1,6 @@
 ;;; racket-hash-lang.el -*- lexical-binding: t; -*-
 
-;; Copyright (c) 2020-2025 by Greg Hendershott.
+;; Copyright (c) 2020-2026 by Greg Hendershott.
 ;; Portions Copyright (C) 1985-1986, 1999-2013 Free Software Foundation, Inc.
 
 ;; Author: Greg Hendershott
@@ -195,6 +195,13 @@ until the back end has handled the update commands and also
 re-tokenization has progressed sufficiently.")
 
 (defvar-local racket-hash-lang-mode-lighter "#lang")
+
+(defvar-local racket--hash-lang-doc-family nil
+  "The get-info value for the key documentation-language-family.")
+(defun racket--hash-lang-doc-family ()
+  "Exposed for `racket--describe-search-completing-read' to call."
+  (and (eq major-mode 'racket-hash-lang-mode)
+       racket--hash-lang-doc-family))
 
 (defconst racket--agnostic-syntax-table
   (let ((table (make-syntax-table)))
@@ -495,6 +502,8 @@ lang's attributes that we care about have changed."
                   (concat "#lang"
                           (when (plist-get plist 'racket-grouping) "()")
                           (when (plist-get plist 'range-indenter) "⇉")))
+      (setq-local racket--hash-lang-doc-family
+                  (plist-get plist 'documentation-language-family))
       ;; Finally run user's module-language-hook.
       (run-hook-with-args 'racket-hash-lang-module-language-hook
                           (plist-get plist 'module-language)))))

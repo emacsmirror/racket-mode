@@ -1,4 +1,4 @@
-;; Copyright (c) 2013-2025 by Greg Hendershott.
+;; Copyright (c) 2013-2026 by Greg Hendershott.
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
 #lang racket/base
@@ -19,6 +19,7 @@
          setup/main-doc
          "define-fallbacks.rkt"
          "lib-pkg.rkt"
+         "safe-dynamic-require.rkt"
          "util.rkt"
          "xref.rkt")
 
@@ -34,6 +35,7 @@
          identifier->bluebox
          bluebox-command
          doc-search
+         doc-families
          module-doc-path
          refresh-doc-index!)
 
@@ -223,8 +225,8 @@
                          (map ~s (exported-index-desc-from-libs desc))])
                       ", "))
        (define fams (match (hash-ref ht 'language-family #f)
-                      [(? list? fams) (string-join (map ~a fams) ", ")]
-                      [#f "Racket"]))
+                      [(? list? fams) fams]
+                      [#f '("Racket")]))
        (define pkg-sort (lib-pkg-sort
                          (match (exported-index-desc-from-libs desc)
                            [(cons lib _) lib]
@@ -249,8 +251,8 @@
               [(or 'lib 'lang 'reader) term]
               [_ (doc-from)])]))
        (define fams (match (hash-ref ht 'language-family #f)
-                      [(? list? fams) (string-join (map ~a fams) ", ")]
-                      [#f "Racket"]))
+                      [(? list? fams) fams]
+                      [#f '("Racket")]))
        (define pkg-sort (lib-pkg-sort
                          (match module-kind
                            ['lib (string->symbol term)]
@@ -277,13 +279,13 @@
                          (match (exported-index-desc-from-libs desc)
                            [(cons lib _) lib]
                            [_            #f])))
-       (values what from "" pkg-sort 0)]
+       (values what from null pkg-sort 0)]
       [(module-path-index-desc? desc)
        (define pkg-sort (lib-pkg-sort (string->symbol term)))
        (values "module" "" "" pkg-sort 0)]
        [else
        (define pkg-sort (lib-pkg-sort #f))
-       (values "documentation" (doc-from) "" pkg-sort 0)]))
+       (values "documentation" (doc-from) null pkg-sort 0)]))
   (list term sort-order what from fams pkg-sort path anchor))
 
 ;; This is for package-details
@@ -293,3 +295,67 @@
     (and (equal? term mod-path-str)
          (equal? what (if lang? "language" "module"))
          (cons path anchor))))
+
+;; Documentation language family information added in Racket 9.1.
+(define doc-families
+  ;; Require some functions both dynamically (in case don't exist in
+  ;; older Racket) and lazily (faster initial load of back end).
+  (let ([get-main-language-family #f]
+        [get-language-families #f]
+        [get-doc-search-dirs #f])
+    (λ ()
+      (define-syntax-rule (req/set! mod fn def-val)
+        (unless fn
+          (set! fn (safe-dynamic-require 'mod 'fn (λ () (λ () def-val))))))
+      (req/set! setup/dirs get-main-language-family "Racket")
+      (req/set! setup/language-family get-language-families null)
+      (req/set! setup/dirs get-doc-search-dirs null)
+      ;; Return cons of main family name, and, list of details for all
+      ;; families. Adjust the details somewhat, from what
+      ;; get-language-families supplies.
+      (define xref (get-xref))
+      (define doc-dirs (get-doc-search-dirs))
+      (cons
+       (get-main-language-family)
+       (for/list ([ht (in-list (get-language-families))])
+         (let* (;; Convert abstract module paths to concrete absolute paths.
+                [ht (for/hash ([(k v) (in-hash ht)])
+                      (cond [(memq k '(doc start-doc describe-doc))
+                             (values k (module-path->absolute-path xref v))]
+                            [else
+                             (values k v)]))]
+                ;; If describe-doc not mapped, use doc.
+                [ht (cond
+                      [(hash-has-key? ht 'describe-doc) ht]
+                      [(hash-ref ht 'doc #f)
+                       => (λ (v) (hash-set ht 'describe-doc v))]
+                      [else ht])]
+                ;; If start-doc not mapped, use doc, else use
+                ;; family-root. See similar logic in
+                ;; send-language-family-page and send-main-page.
+                [ht (cond
+                      [(hash-has-key? ht 'start-doc) ht]
+                      [(hash-ref ht 'doc #f)
+                       => (λ (v) (hash-set ht 'start-doc v))]
+                      [(hash-ref ht 'family-root #f)
+                       =>
+                       (λ (sub)
+                         (or (for/or ([dir (in-list doc-dirs)])
+                               (define path (build-path dir sub "index.html"))
+                               (and (file-exists? path)
+                                    (hash-set ht 'start-doc path)))
+                             ht))]
+                      [else ht])]
+                [ht (hash-remove ht 'doc)])
+           (hash->list ht)))))))
+
+;; Convert mod path => part tag => absolute path.
+;; See send-language-family-page.
+
+(define (module-path->absolute-path xref mp)
+  (define-values (path _anchor)
+    (xref-tag->path+anchor xref (module-path->part-tag mp)))
+  path)
+
+(define (module-path->part-tag mp)
+  `(part (,(format "~a" mp) "top")))

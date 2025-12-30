@@ -56,7 +56,9 @@
                                 (cons (symbol->string o) (symbol->string c)))
           'quote-matches      (for/list ([c (in-list (lang-info-quote-matches li))])
                                 (make-string 1 c))
-          'comment-delimiters (lang-info-comment-delimiters li))))
+          'comment-delimiters (lang-info-comment-delimiters li)
+          'documentation-language-family
+          (lang-info-documentation-language-family li))))
       (define/override (on-changed-tokens gen beg end)
         (when (< beg end)
           (async-channel-put hash-lang-notify-channel

@@ -32,7 +32,7 @@
                                package-details
                                package-op
                                catalog-package-doc-link)]
- ["scribble.rkt"              (bluebox-command doc-search)])
+ ["scribble.rkt"              (bluebox-command doc-search doc-families)])
 
 (provide command-server-loop)
 
@@ -147,6 +147,7 @@
     [`(requires/trim ,path-str)        (requires/trim path-str)]
     [`(requires/base ,path-str)        (requires/base path-str)]
     [`(doc-search ,prefix)             (doc-search prefix)]
+    [`(doc-families)                   (doc-families)]
     [`(hash-lang . ,more)              (apply hash-lang more)]
     [`(pkg-list)                       (package-list)]
     [`(pkg-details ,str)               (package-details str)]
