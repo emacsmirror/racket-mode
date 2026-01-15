@@ -19,7 +19,6 @@
          setup/main-doc
          "define-fallbacks.rkt"
          "lib-pkg.rkt"
-         "safe-dynamic-require.rkt"
          "util.rkt"
          "xref.rkt")
 
@@ -177,23 +176,29 @@
        (add! sub-node more-chs)])))
 
 (define (build-doc-search-trie)
-  (define root (empty-node))
-  (define (hide-desc? desc)
+  (define (get-extras desc . keys)
+    (and (exported-index-desc*? desc)
+         (let ([ht (exported-index-desc*-extras desc)])
+           (for/or ([key (in-list keys)]) (hash-ref ht key #f)))))
+  (define (hide? desc)
     ;; Don't show doc for constructors; class doc suffices.
     (or (constructor-index-desc? desc)
-        (and (exported-index-desc*? desc)
-             (let ([ht (exported-index-desc*-extras desc)])
-               (or (hash-ref ht 'hidden? #f)
-                   (hash-ref ht 'constructor? #f))))))
-  (for* ([entry (in-list (xref-index (get-xref)))]
-         [desc (in-value (entry-desc entry))]
-         #:when desc
-         #:unless (hide-desc? desc)
-         [term (in-value (car (entry-words entry)))]
-         [tag (in-value (entry-tag entry))])
+        (get-extras desc 'hidden? 'constructor?)))
+  (define root (empty-node))
+  (define (add! term desc tag)
     (trie-add! root
                term
                (delay (doc-trie-value desc term tag))))
+  (for* ([entry (in-list (xref-index (get-xref)))]
+         [desc (in-value (entry-desc entry))]
+         #:when desc
+         #:unless (hide? desc)
+         [term (in-value (car (entry-words entry)))]
+         [also (in-value (get-extras desc 'long-key))]
+         [tag (in-value (entry-tag entry))])
+    (add! term desc tag)
+    (when also
+      (add! also desc tag)))
   root)
 
 (define (doc-trie-value desc term tag)
